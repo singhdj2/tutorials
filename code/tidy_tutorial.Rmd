@@ -1,0 +1,179 @@
+---
+title: "Tidyverse Tutorial"
+author: "Daljit Singh"
+date: "5/23/2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Why should we use tidyverse?
+The aim of this tutorial is to make your familiar with the nice verbs that are part of a very neat R package called tidyverse. Of late I have become a heavy user of these convenient functions. At the core of these functions is the tidy data philosophy which is essenatially a long format data rows. You can read more about Hadely Wickham and the creator of tidyverse package. He is a prolific writer and he frequents websites like Reddit, stackoverflow a lot. At the core of the tidyverse are the packages dplyr,tidyr,stringr, and ggplot2. You must have heard about some of these packages before. For the sake of time, I would try to stick with the most useful (in my opinion) verbs for our purpose currently. So lets go...
+
+### load some packages
+I like to use package manager 'pacman' as it saves you the extra work of downloading the package if it doesn't already exist in your environment. The 'if loop' below is an example how you do it without pacman. You may want to check out some other interesting pacman functions as well.
+
+```{r dplyr}
+if (!require(pacman)){
+  install.packages('pacman')
+}
+library(pacman)
+p_load(tidyverse)
+```
+
+### Load data 
+This data is part of my research experiments in India. 
+```{r load data}
+myFile <- '/Users/singhdj2/Dropbox/1.Research_and_Education/Kansas_State_University_2014-/Proffessional_Meetings_Proposals_Awards/2018_tidyverse_tutorial/tutorials/data/18IND-LDH_YC-GHTP_wide_2018-05-24.csv'
+dat <- read.csv(myFile, header = T, stringsAsFactors = F)
+```
+Change to tibble format for convenience
+```{r tibble & glimpse}
+class(dat)
+dat <- as.tibble(dat)
+# lets take a glimpse at our data
+glimpse(dat)
+```
+Notice the glimpse and tibble are part of tidyverse. The glimpse is nice in that it gives us both headshot and a str view of its variables. Tibble has its own benefits which we will see as we move along our way...You will also notice that our data is in a wide format, which is we are mostly used to in breeding programs. Here the variables are arranged as columns as opposed to long format where each row corresponds to unique data points.
+
+### Concept of pipes
+The most versatile feature of tidy code is the ability to pipe your output. If you are familiar with Unix pipes, this is quite similar.. Lets say I want to execute the above lines in a single line of code:
+```{r pipe}
+read.csv(myFile,header=T,stringsAsFactors = F) %>% 
+  as.tibble() %>%
+  glimpse()
+```
+We can capture this output in a data object like this:
+```{r}
+dat.tib <- read.csv(myFile,header=T,stringsAsFactors = F) %>% 
+  as.tibble() %>%
+  glimpse()
+```
+So with pipes you can easily stack things together. This keeps your code clean, concise, and easy to read. 
+
+
+## Selecting variable columns 
+Dplyr allows you to select the desirable columns with whichever way you want: index, bare variable names, range of variable columns...
+```{r}
+# give me the plot_id and column names starting with CT...
+dat.tib %>% 
+  select(plot_id,starts_with('CT')) 
+# give me columns in a certain range with names
+dat.tib %>% 
+  select(plot_id:CT.136)
+# also the sequence of columns in select() is preserved in output
+# you can select with contains argument (similar to MySQL).
+dat.tib %>% 
+  select(plot_id,contains('CT'))
+# deselect/drop columns with minus sign
+dat.tib %>% 
+  select(plot_id,-contains('CT'),starts_with('NDVI'))
+```
+There are many more other options within 'select' that yyou can explore further by yourself.
+
+## Filtering data rows
+We have seen how we can manipulate the columns with 'select'. The same way 'filter' verb which allows you to tinker with the data rows
+```{r}
+dat.tib %>%
+  select(plot_id,NDVIG.101) %>%
+  filter(NDVIG.101 > 0.85)        # can also use >, <, ==, !=, is.na...
+# filter+stringr: easy manipulattion of strings
+dat.tib %>% 
+  select(plot_id,NDVIG.101) %>%
+  filter(str_detect(plot_id,'10001'))
+# there are other str_* functions you may want to check out...
+```
+## Adding new variables
+Anoter handy verb is 'mutate' which, as its name suggests, mutates the columns. Mutate adds new variables and keeps existing columns as such. Different variations of mutate exist i.e. mutate_if, mutate_all, mutate_at.
+```{r}
+dat.tib %>% 
+  mutate(my_plot_id_column_wao=plot_id) %>% # copies plot_id to a new column names my_plot_id...
+  select(plot_id,contains('my_plot_id'))
+# mutate can take multiple columns as argument
+dat.tib %>% 
+  mutate(CT.101.scaled= as.vector(scale(CT.101)),
+         CT.101.add=CT.101+100,
+         CT.101.div=CT.101-100) %>%
+  select(contains('CT.101'))
+```
+Notice the original columns are preserved with mutate.
+We often ancounter situations where we have to change multiple column attributes from numeric, character, vector etc...Mutate_if can be handy in that stuation
+```{r}
+dat.tib %>%
+  mutate_if(is.numeric,as.character) %>%
+  select(contains('CT')) %>%
+  glimpse()
+# I would encourage you to also explore other mutate_* family of functions.
+```
+## Reshape data with tidyr
+According to Hadley the long format data is considered tidy (roughly speaking). The tidyr package (part of tidyverse suite) makes it easier to manipulate data dimensions.
+### lets check out 'gather' and 'spread' verbs from tidyr package
+since our original data is in wider format. We can try gathering it into long format
+```{r}
+dat.tib %>% 
+  gather(key='trait.DAS',value='phenotype_value',CT.101:NDVIG.78)
+```
+Similarly we can spread the data back to original format with spread
+```{r}
+dat.tib %>% 
+  gather(key='trait.DAS',value='phenotype_value',CT.101:NDVIG.78) %>%
+  spread(key = trait.DAS,value = phenotype_value)
+```
+Lets wrap tidyr section with capturing the ouput in a data object
+```{r}
+dat.tib.long <- dat.tib %>% 
+  gather(key='trait.DAS',value='phenotype_value',CT.101:NDVIG.78) 
+```
+## Split-aggregate data rows
+The group_by is a great tool to perform split-style actions on data columns, especially when combined with summarize. Lets divide our data by trait.DAS column and perform summary function on phenotype_value column.
+```{r}
+dat.tib.long %>%
+  group_by(trait.DAS) %>%
+  summarize(phen.val.mean=mean(phenotype_value,na.rm = T))
+```
+Lets put select,mutate,group_by and summarize together. BTW just like mutate_*, summarize also has summarize_at, summarize_all functions. 
+```{r}
+dat.tib.long %>%
+  filter(!is.na(phenotype_value)) %>%
+  group_by(trait.DAS) %>%
+  summarize(phen.val.mean=mean(phenotype_value),
+            num.entries=n())
+```
+we can also apply other summary functions like min, max, standard deviation etc. And most importantly we can apply our own custom functions with summarize. There is only thing to remember when you supply your custom function to summarize: function output should be a single element.
+```{r}
+# we create our coefficient of variation function
+myCVFunc <- function(x){sd(x)/mean(x)*100}
+# supply our custom function to summarize
+dat.tib.long %>%
+  filter(!is.na(phenotype_value)) %>%
+  group_by(trait.DAS) %>%
+  summarize(phen.val.mean=mean(phenotype_value),
+            phen.val.CV=myCVFunc(phenotype_value),
+            num.entries=n())
+```
+### other useful data manipulation functions
+Also check out rename,arrange,separate,unite,distinct....
+
+
+## combining datasets 
+More often with breeding datasets we need to combine multiple files from field. For example, there are separate plot_layout and data collection files. We end up joining files multipple files originating from field or structured databases like mySQL.
+
+
+
+
+
+
+
+#@
+### Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
