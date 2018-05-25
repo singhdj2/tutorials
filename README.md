@@ -1,2 +1,3 @@
-# tutorials
+# Tutorials
 Short tutorials on data wrangling and modeling.
+I intend to add more R and Python tutorials in coming days. My ultimate goal is to make the user familiar with analysis workflows related to plant breeding, genetics and high-throughput phenotyping area. Stay tuned....
