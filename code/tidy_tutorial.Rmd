@@ -1,7 +1,7 @@
 ---
 title: "Tidyverse Tutorial"
-author: "Daljit Singh"
-date: "5/23/2018"
+author: "Daljit Singh (singhdj2@ksu.edu)"
+date: "5/24/2018"
 output:
   pdf_document: default
   html_document: default
@@ -10,89 +10,117 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-## Why should we use tidyverse?
-The aim of this tutorial is to make your familiar with the nice verbs that are part of a very neat R package called tidyverse. Of late I have become a heavy user of these convenient functions. At the core of these functions is the tidy data philosophy which is essenatially a long format data rows. You can read more about Hadely Wickham and the creator of tidyverse package. He is a prolific writer and he frequents websites like Reddit, stackoverflow a lot. At the core of the tidyverse are the packages dplyr,tidyr,stringr, and ggplot2. You must have heard about some of these packages before. For the sake of time, I would try to stick with the most useful (in my opinion) verbs for our purpose currently. So lets go...
+## Why tidyverse?
+The aim of this tutorial is to make you familiar with the verbs that are part of a very neat R meta-package called *tidyverse*. Of late I have become a heavy user of these functions. My views are biased but I think everyone can benefit from using tidy workflows in their analysis. It not only has neat data wrangling functions, the ggplot2 makes it a great graphics package as well. 
+At the core of these functions is the tidy data philosophy which views the tidy data as essenatially a long format unique data rows. You can read more about Hadely Wickham, the creator of *tidyverse* package. He is a prolific writer and a frequent lurker on reddit, stackoverflow, quora etc. The main tidyverse packages are dplyr,tidyr,stringr, and ggplot2. You must have heard about some of these packages before. For the sake of time, I will try to stick with the most useful (in my opinion) verbs in this tutorial. So lets go...
 
-### load some packages
+
+# Load packages
 I like to use package manager 'pacman' as it saves you the extra work of downloading the package if it doesn't already exist in your environment. The 'if loop' below is an example how you do it without pacman. You may want to check out some other interesting pacman functions as well.
 
 ```{r dplyr}
+# download pacman
 if (!require(pacman)){
   install.packages('pacman')
 }
+# load packages
 library(pacman)
-p_load(tidyverse)
+p_load(tidyverse,lme4,corrr)
 ```
 
-### Load data 
-This data is part of my research experiments in India. 
-```{r load data}
+## Load data file
+### Phenotype data description
+We will use this sample dataset from my field experiments in South Asia. These experiments are part of CIMMYT's advanced yield trials in South Asia. These trials are laid out in an alpha-lattice design. But we will treat them as RCBD for the sake of simplicity. The dataframe has 'plot_id', Canopy Temp ('CT'), 'NDVI', and Grain Yield (GRYLD) data columns. The CT and NDVI were collected at multiple time-points during the wheat season. Each date of CT and NDVI data will be treated as separate trait for this tutorial.  
+
+```{r load-data}
 myFile <- '/Users/singhdj2/Dropbox/1.Research_and_Education/Kansas_State_University_2014-/Proffessional_Meetings_Proposals_Awards/2018_tidyverse_tutorial/tutorials/data/18IND-LDH_YC-GHTP_wide_2018-05-24.csv'
 dat <- read.csv(myFile, header = T, stringsAsFactors = F)
 ```
-Change to tibble format for convenience
 ```{r tibble & glimpse}
+# check data class 
 class(dat)
+# change to tibble format for convenience
 dat <- as.tibble(dat)
 # lets take a glimpse at our data
 glimpse(dat)
 ```
-Notice the glimpse and tibble are part of tidyverse. The glimpse is nice in that it gives us both headshot and a str view of its variables. Tibble has its own benefits which we will see as we move along our way...You will also notice that our data is in a wide format, which is we are mostly used to in breeding programs. Here the variables are arranged as columns as opposed to long format where each row corresponds to unique data points.
 
-### Concept of pipes
-The most versatile feature of tidy code is the ability to pipe your output. If you are familiar with Unix pipes, this is quite similar.. Lets say I want to execute the above lines in a single line of code:
+The *glimpse* and *tibble* functions are part of tidyverse. *glimpse* is nice in that it gives us both headshot and a structure of data variables. *Tibble* has its own benefits which we will see as we move along this tutorial.  You will also notice that our data is in a wide format, which is a common format in reasearch experiments. If you are familiar with structured databases like SQL then think of this as opposite of database format. Here the data variables (i.e. GRYLD, CT and NDVI) are arranged as columns as opposed to long format where each row corresponds to unique data points.
+
+## Concept of pipes
+By far the most convenient feature of *tidyverse* is the ability to pipe your code. If you are familiar with Unix pipes, you could easily relate to the idea. I will give a pertinent exmple. Lets say I want to execute the lines above (data loading section) in a single line of code. We can do this with pipes easily:
+
 ```{r pipe}
 read.csv(myFile,header=T,stringsAsFactors = F) %>% 
   as.tibble() %>%
   glimpse()
 ```
-We can capture this output in a data object like this:
+
+We can capture this output in a new object like this:
 ```{r}
 dat.tib <- read.csv(myFile,header=T,stringsAsFactors = F) %>% 
   as.tibble() %>%
   glimpse()
 ```
-So with pipes you can easily stack things together. This keeps your code clean, concise, and easy to read. 
-
+Notice that with pipes one can easily stack things together while keeping the code clean, concise, and easy to read. 
 
 ## Selecting variable columns 
-Dplyr allows you to select the desirable columns with whichever way you want: index, bare variable names, range of variable columns...
-```{r}
-# give me the plot_id and column names starting with CT...
+Tidyverse::dplyr allows you to select the desirable data columns in many different (and very intuitive) ways: number, bare variable names, range of variable columns etc.
+
+```{r select}
+# give me the plot_id and column names starting with CT
 dat.tib %>% 
   select(plot_id,starts_with('CT')) 
+
 # give me columns in a certain range with names
 dat.tib %>% 
   select(plot_id:CT.136)
-# also the sequence of columns in select() is preserved in output
+
 # you can select with contains argument (similar to MySQL).
 dat.tib %>% 
   select(plot_id,contains('CT'))
+
 # deselect/drop columns with minus sign
 dat.tib %>% 
   select(plot_id,-contains('CT'),starts_with('NDVI'))
+
+# also the sequence of columns in select() is preserved in output, meaning you can use select to rearrange column positions
+dat.tib %>% 
+  select(plot_id,CT.77,CT.101,CT.121) 
 ```
-There are many more other options within 'select' that yyou can explore further by yourself.
+
+There are many more other options within *select* that you can explore further by yourself.
 
 ## Filtering data rows
-We have seen how we can manipulate the columns with 'select'. The same way 'filter' verb which allows you to tinker with the data rows
-```{r}
+We have seen how we can manipulate the columns with *select*. Just as the *select* does the columns, *filter* allows you to play with the data rows.
+
+```{r filter}
+# get data rows with more than 0.85 NDVI values on 101 DAS 
 dat.tib %>%
   select(plot_id,NDVIG.101) %>%
   filter(NDVIG.101 > 0.85)        # can also use >, <, ==, !=, is.na...
-# filter+stringr: easy manipulattion of strings
+```
+
+*filter+stringr*: easy manipulattion of strings
+```{r}
 dat.tib %>% 
   select(plot_id,NDVIG.101) %>%
   filter(str_detect(plot_id,'10001'))
 # there are other str_* functions you may want to check out...
 ```
-## Adding new variables
-Anoter handy verb is 'mutate' which, as its name suggests, mutates the columns. Mutate adds new variables and keeps existing columns as such. Different variations of mutate exist i.e. mutate_if, mutate_all, mutate_at.
-```{r}
+
+
+## Adding new variables with mutate
+Anoter handy verb is *mutate* that, as its name suggests, mutates the columns. *Mutate* adds new variables and keeps existing columns as such. Different variations of mutate exist i.e. *mutate_if*, *mutate_all*,* mutate_at*.
+
+```{r mutate}
 dat.tib %>% 
-  mutate(my_plot_id_column_wao=plot_id) %>% # copies plot_id to a new column names my_plot_id...
+  mutate(my_plot_id_column_wao_cool=plot_id) %>% #create a new column...
   select(plot_id,contains('my_plot_id'))
-# mutate can take multiple columns as argument
+```
+
+### Mutate can take multiple arguments
+```{r mutate cont..}
 dat.tib %>% 
   mutate(CT.101.scaled= as.vector(scale(CT.101)),
          CT.101.add=CT.101+100,
@@ -100,51 +128,76 @@ dat.tib %>%
   select(contains('CT.101'))
 ```
 Notice the original columns are preserved with mutate.
+
+### Advance mutate
 We often ancounter situations where we have to change multiple column attributes from numeric, character, vector etc...Mutate_if can be handy in that stuation
-```{r}
+
+```{r mutate_*}
 dat.tib %>%
   mutate_if(is.numeric,as.character) %>%
   select(contains('CT')) %>%
   glimpse()
 # I would encourage you to also explore other mutate_* family of functions.
 ```
+
+
+## Correlations with tidyverse
+```{r correlations}
+dat.tib.corr <- dat.tib %>%
+  select(-plot_id) %>%
+  corrr::correlate() %>%       # create correlation matrix
+  #shave() %>%                 # shave off upper triangle
+  fashion()                    # nicely formatted corr table
+  #stretch() %>%               # stretch in long format
+#View(dat.tib.corr)
+```
+
 ## Reshape data with tidyr
-According to Hadley the long format data is considered tidy (roughly speaking). The tidyr package (part of tidyverse suite) makes it easier to manipulate data dimensions.
-### lets check out 'gather' and 'spread' verbs from tidyr package
-since our original data is in wider format. We can try gathering it into long format
+We consider the long format data with unique data rows as tidy (roughly speaking). The *tidyr* package (part of *tidyverse* suite) makes it easier to manipulate data shape. 
+
+### Lets check out *gather* and *spread* verbs from *tidyr* package
+since our original data is in wide format. First, we will try to gather it into long format
 ```{r}
 dat.tib %>% 
   gather(key='trait.DAS',value='phenotype_value',CT.101:NDVIG.78)
 ```
+
 Similarly we can spread the data back to original format with spread
 ```{r}
 dat.tib %>% 
   gather(key='trait.DAS',value='phenotype_value',CT.101:NDVIG.78) %>%
   spread(key = trait.DAS,value = phenotype_value)
 ```
-Lets wrap tidyr section with capturing the ouput in a data object
+
+Lets wrap this section with capturing the ouput in a data object
 ```{r}
 dat.tib.long <- dat.tib %>% 
   gather(key='trait.DAS',value='phenotype_value',CT.101:NDVIG.78) 
 ```
+
+
 ## Split-aggregate data rows
 The group_by is a great tool to perform split-style actions on data columns, especially when combined with summarize. Lets divide our data by trait.DAS column and perform summary function on phenotype_value column.
-```{r}
+
+```{r summarize}
 dat.tib.long %>%
-  group_by(trait.DAS) %>%
-  summarize(phen.val.mean=mean(phenotype_value,na.rm = T))
+  group_by(trait.DAS) %>%   #split by trait.DAS
+  summarize(phen.val.mean=mean(phenotype_value,na.rm = T)) #summary means per trait.DAS
 ```
-Lets put select,mutate,group_by and summarize together. BTW just like mutate_*, summarize also has summarize_at, summarize_all functions. 
-```{r}
+
+Now let's put *select*, *mutate*, *group_by* and *summarize* together. BTW just like *mutate_*, *summarize* also has summarize_at, summarize_all functions. 
+```{r collect n}
 dat.tib.long %>%
   filter(!is.na(phenotype_value)) %>%
   group_by(trait.DAS) %>%
   summarize(phen.val.mean=mean(phenotype_value),
             num.entries=n())
 ```
-we can also apply other summary functions like min, max, standard deviation etc. And most importantly we can apply our own custom functions with summarize. There is only thing to remember when you supply your custom function to summarize: function output should be a single element.
+Summarize also takes other summary functions like min, max, standard deviation etc. And most importantly we can apply our own custom functions with summarize. There is only thing to remember when you supply your custom function to *summarize*: output should be able to take a vector and creates single element vector.
+
+### Apply a custom coefficient of variation function
 ```{r}
-# we create our coefficient of variation function
+# my CV function
 myCVFunc <- function(x){sd(x)/mean(x)*100}
 # supply our custom function to summarize
 dat.tib.long %>%
@@ -154,26 +207,106 @@ dat.tib.long %>%
             phen.val.CV=myCVFunc(phenotype_value),
             num.entries=n())
 ```
-### other useful data manipulation functions
-Also check out rename,arrange,separate,unite,distinct....
+
+## Other useful data manipulation functions
+I encourage you to also check *rename, arrange, separate, unite, distinct* verbs for advanced data wrangling....
 
 
-## combining datasets 
-More often with breeding datasets we need to combine multiple files from field. For example, there are separate plot_layout and data collection files. We end up joining files multipple files originating from field or structured databases like mySQL.
+## Combining two datasets with joins
 
+More often with breeding datasets we need to combine multiple files from field experiments. For example, there are separate plot-layout and phenotype data files. We end up joining multiple files originating from field  with excel. But with these functions you can join dataframes with very large number of variable columns very easy!  
 
+### Left-join example
 
-
-
-
-
-#@
-### Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+Load plot attribute data from file
+```{r echo=FALSE}
+dat.plots <- read.csv('/Users/singhdj2/Dropbox/1.Research_and_Education/Kansas_State_University_2014-/Proffessional_Meetings_Proposals_Awards/2018_tidyverse_tutorial/tutorials/data/18IND-LDH-BMZ_plots.csv',header=T,stringsAsFactors = F)
+glimpse(dat.plots)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Join plots and phenotype data together
+```{r left-join}
+dat.joined <- dat.plots %>% 
+  left_join(.,dat.tib.long,by='plot_id')
+glimpse(dat.joined)
+```
+
+Get rid of extra columns and change column attributes
+```{r }
+dat.joined <- dat.joined %>%
+  select(plot_id,trial,rep,subblock,col,row,entry,
+         gid,trait.DAS,phenotype_value) %>%
+  mutate_at(vars(rep:gid), as.character)
+glimpse(dat.joined)
+```
+
+
+
+## Calculating heritability the 'tidy' way
+Generally, it is a good practice to keep your function definitions and source calls at the beginning of code file. But for the sake of our tutorial workflow I am keeping it here.
+
+```{r H2-function}
+# function to calc heritability per each trait (trial as main factor)
+calcH2Trialfunc <- function(dat) {
+  if (sum(!is.na(dat$phenotype_value))/dim(dat)[1] > 0.9) {
+      v = data.frame(VarCorr(lmer(phenotype_value ~ 0 + (1|gid) + (1|trial:rep) + (1|trial:rep:subblock), data=dat)))
+      data.frame(H2=round(v[1,4]/(v[1,4]+(v[4,4]/2)),2), vG=v[1,4], vE=v[4,4])
+  } else {
+      data.frame(H2=NA, vG=NA, vE=NA)
+  }
+}
+# This is the basic mixed model for calculating broad-sense heritability on an entry-mean basis in my experiments. We can add additional design factors into the mix to get a better estimate of error and genotypic variance.
+```
+
+Now lets apply the heritability/repeatability function by grouping with trait.DAS
+
+```{r H2-calc}
+dat.h2 <- dat.joined %>%
+  group_by(trait.DAS) %>%
+  do(calcH2Trialfunc(.)) %>%  # 'do' is summarize equivalent but for dataframes
+  ungroup()                   # ungroup the dataframe output
+# lets take a look at our heritability data
+dat.h2
+```
+Our heritability data has: first column 'trait.DAS' (our grouping variable); second column heritability; third and fourth the genotypic and residual variances, respectively. 
+
+
+## Plotting the H2 data with ggplot2
+### Split columns
+```{r ggplot}
+dat.h2.tidy <- dat.h2 %>%
+  separate(trait.DAS,into=c('trait_id','DAS'),remove=F) 
+# take a look at data
+dat.h2.tidy
+```
+
+### Now we can proceed with plotting
+```{r plot}
+dat.h2.tidy %>%
+  filter(trait_id %in% c('CT','NDVIG')) %>%   #keep only NDVI & CT for plotting
+  ggplot(aes(y=H2, x=as.numeric(DAS), 
+             colour = trait_id, 
+             linetype=trait_id,
+             shape=factor(trait_id)), 
+         data = .) +
+  geom_line(size = 1.5) +
+  ylim(0.00,1.00) +
+  scale_x_continuous(breaks = seq(60,160,10)) + 
+  labs(title = "Heritability trends of NDVI and CT Traits in 18IND-LDH-BMZ",subtitle= 'NDVI: Normalized Diff Vegetation Index; CT: Canopy Temperature') + 
+  labs(x = "Days after sowing (days)", y = expression(H^2)) +
+  scale_colour_manual("",values=c("orange","purple")) +
+  scale_linetype_manual("", values=c(1,1)) +
+  scale_shape_manual("", values=c(0:1,2)) +
+  geom_point(size = 3)
+
+```
+
+
+## This concludes our session on tidy data analyis. In coming sessions we will explore other data modeling and management related topics. Please feel free to ask if you have any questions. 
+
+
+
+```{r session-info}
+sessionInfo()
+```
+
