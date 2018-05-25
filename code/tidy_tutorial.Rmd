@@ -40,7 +40,7 @@ dat <- read.csv(myFile, header = T, stringsAsFactors = F)
 # check data class 
 class(dat)
 # change to tibble format for convenience
-dat <- as.tibble(dat)
+dat <- as_tibble(dat)
 # lets take a glimpse at our data
 glimpse(dat)
 ```
@@ -60,7 +60,7 @@ We can capture this output in a new object like this:
 ```{r}
 dat.tib <- read.csv(myFile,header=T,stringsAsFactors = F) %>% 
   as.tibble() %>%
-  glimpse()
+  glimpse() 
 ```
 Notice that with pipes one can easily stack things together while keeping the code clean, concise, and easy to read. 
 
@@ -70,7 +70,7 @@ Tidyverse::dplyr allows you to select the desirable data columns in many differe
 ```{r select}
 # give me the plot_id and column names starting with CT
 dat.tib %>% 
-  select(plot_id,starts_with('CT')) 
+  select(starts_with('pl'),contains('NDV')) 
 
 # give me columns in a certain range with names
 dat.tib %>% 
@@ -86,7 +86,7 @@ dat.tib %>%
 
 # also the sequence of columns in select() is preserved in output, meaning you can use select to rearrange column positions
 dat.tib %>% 
-  select(plot_id,CT.77,CT.101,CT.121) 
+  select(CT.121,plot_id,CT.77,CT.101) 
 ```
 
 There are many more other options within *select* that you can explore further by yourself.
@@ -97,8 +97,8 @@ We have seen how we can manipulate the columns with *select*. Just as the *selec
 ```{r filter}
 # get data rows with more than 0.85 NDVI values on 101 DAS 
 dat.tib %>%
-  select(plot_id,NDVIG.101) %>%
-  filter(NDVIG.101 > 0.85)        # can also use >, <, ==, !=, is.na...
+  #select(plot_id,NDVIG.101) %>%
+  filter(GRYLD.NA > mean(GRYLD.NA))        # can also use >, <, ==, !=, is.na...
 ```
 
 *filter+stringr*: easy manipulattion of strings
@@ -106,6 +106,7 @@ dat.tib %>%
 dat.tib %>% 
   select(plot_id,NDVIG.101) %>%
   filter(str_detect(plot_id,'10001'))
+
 # there are other str_* functions you may want to check out...
 ```
 
@@ -115,7 +116,7 @@ Anoter handy verb is *mutate* that, as its name suggests, mutates the columns. *
 
 ```{r mutate}
 dat.tib %>% 
-  mutate(my_plot_id_column_wao_cool=plot_id) %>% #create a new column...
+  mutate(CT.101=as.numeric(CT.101)) %>% #create a new column...
   select(plot_id,contains('my_plot_id'))
 ```
 
@@ -134,7 +135,7 @@ We often ancounter situations where we have to change multiple column attributes
 
 ```{r mutate_*}
 dat.tib %>%
-  mutate_if(is.numeric,as.character) %>%
+  mutate_at(vars(CT.101:CT.121),as.character) %>%
   select(contains('CT')) %>%
   glimpse()
 # I would encourage you to also explore other mutate_* family of functions.
@@ -145,8 +146,8 @@ dat.tib %>%
 ```{r correlations}
 dat.tib.corr <- dat.tib %>%
   select(-plot_id) %>%
-  corrr::correlate() %>%       # create correlation matrix
-  #shave() %>%                 # shave off upper triangle
+  correlate() %>%       # create correlation matrix
+  shave() %>%                 # shave off upper triangle
   fashion()                    # nicely formatted corr table
   #stretch() %>%               # stretch in long format
 #View(dat.tib.corr)
