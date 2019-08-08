@@ -1,0 +1,54 @@
+---
+title: "Instructions for HTP Tutorial"
+author: Daljit Singh "singhdj2@ksu.edu"
+date: "August 8, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# INSTRUCTIONS  
+The following are some instructions for our HTP temporal data analysis tutorial. Please follow these steps before attending the session. If you have any trouble with the installation steps, feel free to shoot me an email.
+
+# 1. Install R and R-studio programs on your computer  
+If you do not have these programs installed, go to these links and follow the installation instructions.  
+
+- Base or Vanilla R: https://www.r-project.org/ 
+- R-studio desktop FREE version: https://www.rstudio.com/products/rstudio/download/ 
+
+
+# 2. Prepare Project Files 
+We will prepare a project directory where all our data, scripts and outputs will be stored. I implement this step for every project that I work on. This helps to keep things tractable and organized. 
+
+- Open R studio program
+- Get yourself familiar with the various parts of the program (terminal, Environment, help panes...)
+- Top right section on the program window where you see a small blue R-studio icon, click on the drop down list and select `new project` >> `New Directory` >> type ["htp-tutorial"]. This will create a separate project directory dedicated for our tutorial
+- Now open the 'htp-tutorials' directory in your file explorer and create three different directories to hold 'data', 'code', 'output' 
+
+
+
+# 3. Download Required Data and Scripts
+Go to my github project repo (https://github.com/singhdj2/tutorials) and download the following files on your computer:  
+
+- Download data file residing inside the *data* directory *18LDH-tutorial-log-regression_2019-06-19.csv* and place it inside *htp-tutorials >> data* directory we just created on your computer during step 1 above 
+- R markdown file inside the *code* directory *tutorial-summary-htp-log-regr.Rmd* and place it inside *htp-tutorials >> code*  
+
+
+# 4. Install Packages in R-studio
+Uncomment the following three lines of code >> copy-paste in R console >> hit ENTER button to install some required packages: 
+``` {r}
+# install.packages("pacman")
+# library(pacman)
+# p_load(tidyverse,nlme,car,ggpubr,rcompanion)
+```
+
+## Finally, if everything went well upto this point then you are all set for our final tutorial session. Else if you still have difficulty with the installations, you can arrive 10 minutes early to the tutorial session and we will try to help troubleshoot. 
+
+## Happy R Coding...
+
+
+
+
+
