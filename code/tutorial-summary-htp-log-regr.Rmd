@@ -1,0 +1,306 @@
+---
+title: "Summarizing HTP Temporal Data"
+author: "singhdj2@ksu.edu"
+date: "June 19, 2019"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+The objective of today's exercise is to make you familiar with the processing of high-throughput phenotyping data. We will use plant height trait as an example. The data was collected from two wheat experiments in South Asia in year 2018 using an unmanned aerial vehicle a.k.a. drone. There were a total of 1120 wheat test plots (size 1.2m x 3m) in each experiment. The two experiments are identical in terms of genotypes and plot layout except these were planted at two different sowing dates (Optimum on 23-Oct, Late on 11 Nov). The main objective of this field experiment was to assess the effect of sowing dates on plant growth and yield. The data was collected at multiple times during the wheat growing season. Overall this dataset captures the dynamic changes in wheat height during its growth cycle. Through this exercise you will learn:
+* How to process plot-level height data from multiple dates
+* Model the growth dynamics of height through non-linear regression 
+* Visualize the results
+* Compare the effects of sowing dates on wheat height and growth
+
+```{r load-packages, echo=FALSE}
+#install.packages(pacman)
+library(pacman)
+p_load(tidyverse,nlme,car,ggpubr,rcompanion) 
+```
+
+# First, let us create a logistic regression function to model wheat growth. This is just the definition of function, we will call it later in the analysis.
+
+Quick question: Why is there any need to create functions? 
+
+```{r model definitions}
+runLogReg = function(dates, phenValue){
+  # create column name strings for fit stats
+  fit.stat.cols <- c("Min.max.accuracy","MAE","MAPE","MSE","RMSE",
+                    "NRMSE.mean","NRMSE.median","NRMSE.mean.accuracy", "NRMSE.median.accuracy","Efron.r.squared","CV.prcnt")
+  if(sum(!is.na(phenValue))==0){         # skip if no phenotype data
+    pred = data.frame(x=NA,y=NA) %>%     # fill NA since no data
+      nest()
+    res <- data.frame(phi1=NA, phi2=NA, phi3=NA, 
+                      flag="no-data", stringsAsFactors = F)
+    fit.stats <- as.data.frame(matrix(nrow = 1,ncol = 11,
+                                      dimnames = list(1,fit.stat.cols))) # empty fit.stats
+    pred.res <- bind_cols(pred,res,fit.stats)      # bind columns
+    return(pred.res)                     # return the data frame
+    } 
+  if(max(phenValue, na.rm=TRUE) < 60){   ## skip plots that never reach 60cm height
+    pred = data.frame(x=NA,y=NA) %>%
+      nest()
+    res <- data.frame(phi1=NA, phi2=NA, phi3=NA, flag="short.max.ht", 
+                      stringsAsFactors = F) # flag short plots
+    fit.stats <- as.data.frame(matrix(nrow = 1,ncol = 11,
+                                      dimnames = list(1,fit.stat.cols))) # empty fit.stats
+    pred.res <- bind_cols(pred,res,fit.stats)
+    return(pred.res)
+  } 
+  ## get Thermal Time
+  days = dates 
+  if(sum(!is.na(phenValue)) >= 9) {        # run only plots that have at least 9 time-points  
+    # add some dummy variables for min and max height at 50-100 ThermalDays before/after the phenotyping range
+    # buffer raw data to force start values to zero
+    days = c(days, c(0,50,75,100), max(days,na.rm=T)+c(50,75,100,150))
+    height = c(phenValue, c(0,0,0,0),rep(max(phenValue,na.rm=T),4))   #c(0,0,0,100,100,100))
+    ##find initial starting values for phi2 and phi3,  fix phi1 at max pheno value
+    phi1 = max(phenValue,na.rm=T)                      # maximum height parameter
+    phi2 = coef(lm(logit(height/phi1)~days))[2]        # growth rate
+    phi3 = -coef(lm(logit(height/phi1)~days))[1]/phi2  # time at half-max growth
+    # Run logistic regression model
+    growth_mod <- try(nls(height~ max(phenValue,na.rm=T)/(1+exp(-phi2*(days - phi3))), 
+                          start=list(phi2=phi2,phi3=phi3), trace=FALSE), silent=TRUE)
+    if(class(growth_mod)!="try-error"){              # this condition is to handle errors
+      phi2 = coef(growth_mod)[1]
+      phi3 = coef(growth_mod)[2]
+      ## get predicted value
+      pred = getPred(phi1, phi2, phi3) %>%
+        nest()
+      res = data.frame(phi1, phi2, phi3,flag="data.complete",
+                       stringsAsFactors = F)         # combine all growth coeficients
+      fit.stats <- accuracy(list(growth_mod),plotit = F)$Fit.criteria # gives pseudo-Rsq and other fit stats
+      colnames(fit.stats) <- fit.stat.cols
+      pred.res = bind_cols(pred,res,fit.stats)       # bind growth and predicted values
+      return(pred.res)
+    } else {                                         # skip if doesn't converge
+      pred = data.frame(x=NA,y=NA) %>%
+        nest()
+      res <- data.frame(phi1=NA,phi2=NA,phi3=NA,flag='try-error',
+                        stringsAsFactors = F)
+      fit.stats <- as.data.frame(matrix(nrow = 1,ncol = 11,dimnames = list(1,fit.stat.cols))) # empty fit.stats
+      pred.res <- bind_cols(pred,res,fit.stats)
+      return(pred.res)
+    } 
+  } else {    
+    pred = data.frame(x=NA,y=NA) %>%
+      nest()
+    res <- data.frame(phi1=NA,phi2=NA,phi3=NA,flag="few-time-points",
+                      stringsAsFactors = F)
+    fit.stats <- as.data.frame(matrix(nrow = 1,ncol = 11,
+                                      dimnames = list(1,fit.stat.cols))) # empty fit.stats
+    pred.res <- bind_cols(pred,res,fit.stats)
+    return(pred.res)
+  }
+}
+
+# This function extracts predictions for desired x values (e.g. days, thermal days)
+getPred = function(phi1, phi2, phi3){
+  x <- seq(0,2500,by=50)  #construct a range of x values for thermal time
+  y <- try(phi1/(1+exp(-phi2*(x - phi3))),silent=TRUE)  #predicted y values  <old: exp(-(phi2+phi3*x)))
+  if(class(y)!="try-error"){ 
+    pred <- data.frame(x,y)                                #create the prediction data frame
+    return(pred)
+  } else {
+    pred <- data.frame(x=NA,y=NA)
+    return(pred)
+  }
+}
+```
+
+# Read data from file into current R session.
+
+```{r read-data, echo=TRUE}
+# read curated data UAV height data 
+dat.ht <- read.csv("18LDH-tutorial-log-regression_2019-06-19.csv",stringsAsFactors = F,header = T)
+head(dat.ht)
+```
+
+
+# Check column attributes
+```{r data-checks, echo=TRUE}
+glimpse(dat.ht) 
+# set condition as 'factor' for plotting convenience
+dat.ht <- as_tibble(dat.ht) %>%
+  mutate(condition=factor(condition,levels=c("Optimum","Late")))
+```
+
+
+# How many unique timepoints are there per condition?
+```{r calc-time-points, echo=TRUE}
+dat.ht %>% 
+  group_by(condition) %>% 
+  summarize(time.points=length(unique(thermal.time)))
+```
+
+
+# Lets get mean height per time-point for each condition
+```{r get-mean-height, echo=TRUE}
+dat.ht %>% 
+  group_by(condition,thermal.time) %>%
+  summarise(ht.mean=mean(phenotype_value,na.rm=T))
+```
+
+
+# Now plot raw data trends for both field conditions
+```{r plot-height-trends}
+x.label = "Thermal Time (°Cd)"    
+ggplot(data=dat.ht, aes(y = phenotype_value, 
+                        x = thermal.time, 
+                        group=interaction(thermal.time,condition), 
+                        fill=condition)) +
+  geom_boxplot(width=25,alpha=0.7,notch = TRUE, size=0.8,
+               notchwidth = 0.5, outlier.alpha = 0.2) +
+  labs(x=x.label,y="Height (cm)") +
+  scale_y_continuous(breaks= seq(0,150,20)) +
+  scale_x_continuous(breaks= seq(0,2400,200)) +
+  theme_minimal() +
+  theme(panel.border = element_rect(colour = "black", fill = NA, size = .5),
+        axis.text.x = element_text(colour = "black", size = 11,angle = 0),
+        axis.text.y = element_text(colour = "black", size = 11),
+        plot.title = element_text(size = 14, face = "bold"),
+        text = element_text(size=14,face="bold"),
+        legend.position="top") +
+  guides(fill=guide_legend(title="")) +
+  annotate("rect", xmin=1650, xmax=2320, ymin=96, ymax=101, alpha=0.3, fill="red") +
+  annotate("rect", xmin=1400, xmax=2100, ymin=90, ymax=95, alpha=0.3, fill="#0da3a7")
+
+# We can also save the above plot by using ggsave function.
+# create a file name character string
+# fName = paste0('../data/18LDH_tutorial-height-trend_boxplot_',Sys.Date(),'.jpg')
+# # save the plot on disk
+# ggsave(fName, plot = last_plot(), device = "jpg", path = "output/",
+#        scale = 1, width = 10, height = 6.5, units = c("in"), dpi=800)
+```
+
+# Question: How are the height trends different for two sowing dates?
+
+
+# Next, we will apply logistic regression function per plot and condition using group_by and do functions from dplyr package.
+```{r run-logRegr, warning=FALSE}
+dat.ht.growth <- dat.ht %>%
+  group_by(condition,plot_id) %>%    
+  do(runLogReg(dates = .$thermal.time, phenValue = .$phenotype_value)) %>%
+  ungroup() 
+head(dat.ht.growth)
+```
+## Note that the parameters phi1, phi2, phi3 correspond to the maximum plant height (cm), growth rate (cm/thermal time), thermal time when plant is halfway the maximum height (degree Cd), respectively.
+
+
+# Now that we have succefully summarized our time-points into three biologically interpretable parameters, we can go ahead and take a look at the regression fit summaries to find out how good our model was able to fit the original data.
+```{r fit-summaries, warning=FALSE}
+gghistogram(dat.ht.growth, x = "RMSE",
+   add = "mean", rug = T,
+   color = "condition", fill = "condition",
+   palette = c("#00AFBB", "#E7B800")) +
+  rremove("legend") +
+  xlab("Root Mean Sq Error") +
+  ylab("Count")
+```
+
+## The R-square statistic is a bit tricky for non-linear models. Therefore, Efron.r-sq is used as a workaround approximation for checking the model fits in non-linear models. We will plot Efron.r-sq to check the fit of our regression model. 
+
+```{r fit-R2, warning=FALSE}
+gghistogram(dat.ht.growth, x = "Efron.r.squared",
+   add = "mean", rug = T,
+   #color = "condition",
+   fill = "#00AFBB",
+   facet.by = "condition") +
+  rremove("legend") +
+  xlab("Root Mean Sq Error") +
+  ylab("Count")
+```
+# Does sowing date have any effect on plant growth? Lets dig further.
+
+## Let us check mean values for each growth parameter.
+```{r calc-mean-params, warning=FALSE}
+growth.mean <- dat.ht.growth %>% 
+  group_by(condition) %>% 
+  summarize_at(vars(contains('phi')),funs(mean(.,na.rm = T)))
+growth.mean
+```
+## Are these mean values statistically significant?
+
+## We can create violin plots and perform mean comparisons for phi1 (maximum plant height)
+```{r plotting-phi1, warning=FALSE}
+# Specify the comparisons you want
+my_comparisons <- list( c("Optimum", "Late") )
+
+# plot violins
+dat.ht.growth %>% as_tibble() %>%
+  ggviolin(., x = "condition", y = "phi1", 
+           fill = "condition",
+           palette = c("#00AFBB", "#E7B800"), #"#FC4E07"),
+           #facet.by = "trait_id",
+           #scales = "free",
+           add = "boxplot", add.params = list(fill = "white")) +
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")+ # Add significance levels
+  stat_compare_means(label.y = 150) +
+  rremove("legend") +
+  xlab("Condition") +
+  ylab("Digital Plant Height (cm)")
+# fName = paste0('18LB-LS_raw-filtered-phi1_boxplot-violin_2018_',Sys.Date(),'.jpg')
+# ggsave(fName, plot = last_plot(), device = "jpg", path = "output/",
+#        scale = 1, width = 10, height = 6.5, units = c("in"), dpi=1200)
+```
+
+##What do you see in the plots? 
+
+##Does this figure answer our question of sowing date effect on plant height?
+
+## Violin plots for phi2 (height growth rate)
+```{r plotting-phi2, warning=FALSE}
+dat.ht.growth %>% as_tibble() %>%
+  ggviolin(., x = "condition", y = "phi2", 
+           fill = "condition",
+           palette = c("#00AFBB", "#E7B800"), #"#FC4E07"),
+           #facet.by = "trait_id",
+           #scales = "free",
+           add = "boxplot", add.params = list(fill = "white")) +
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")+ # Add significance levels
+  stat_compare_means(label.y = 0.006) +
+  rremove("legend") +
+  xlab("Condition") +
+  ylab("Growth Rate (cm/°Cd)")
+# fName = paste0('18LB-LS_raw-filtered-phi2_boxplot-violin_2018_',Sys.Date(),'.jpg')
+# ggsave(fName, plot = last_plot(), device = "jpg", path = "output/",
+#        scale = 1, width = 10, height = 6.5, units = c("in"), dpi=1200)
+```
+
+## Does the late planted crop grow faster? If so, why?
+
+## Violin plots for phi3 (time to reach half maximum height).
+```{r plotting-phi3, warning=FALSE}
+## phi3 - plot violins with threshold
+dat.ht.growth %>% as_tibble() %>%
+  ggviolin(., x = "condition", y = "phi3", 
+           fill = "condition",
+           palette = c("#00AFBB", "#E7B800"), #"#FC4E07"),
+           #facet.by = "trait_id",
+           #scales = "free",
+           add = "boxplot", add.params = list(fill = "white")) +
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")+ # Add significance levels
+  stat_compare_means(label.y = 1400) +
+  rremove("legend") +
+  xlab("Condition") +
+  ylab("°Cd to Reach Half-maximum Height)")
+# fName = paste0('18LB-LS_raw-filtered-phi3_boxplot-violin_2018_',Sys.Date(),'.jpg')
+# ggsave(fName, plot = last_plot(), device = "jpg", path = "output/",
+#        scale = 1, width = 10, height = 6.5, units = c("in"), dpi=1200)
+
+```
+
+
+
+
+
+
+
+
