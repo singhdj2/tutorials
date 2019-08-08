@@ -32,16 +32,16 @@ We will prepare a project directory where all our data, scripts and outputs will
 # 3. Download Required Data and Scripts
 Go to my github project repo (https://github.com/singhdj2/tutorials) and download the following files on your computer:  
 
-- Download data file residing inside the *data* directory *18LDH-tutorial-log-regression_2019-06-19.csv* and place it inside *htp-tutorials >> data* directory we just created on your computer during step 1 above 
-- R markdown file inside the *code* directory *tutorial-summary-htp-log-regr.Rmd* and place it inside *htp-tutorials >> code*  
+- Download data file residing inside the *data* directory *18LDH-tutorial-log-regression_2019-06-19.csv* and place it inside *htp-tutorials >> data* directory we just created on your computer in step 1 above 
+- R markdown file inside the *code* directory *tutorial-summary-htp-log-regr.Rmd* and place it inside *htp-tutorials >> code* on your computer 
 
 
 # 4. Install Packages in R-studio
-Uncomment the following three lines of code >> copy-paste in R console >> hit ENTER button to install some required packages: 
-``` {r}
-# install.packages("pacman")
-# library(pacman)
-# p_load(tidyverse,nlme,car,ggpubr,rcompanion)
+Copy the following three lines of code >> Paste in R console and hit ENTER to install required packages (note: active internet connection is required): 
+``` {r, eval=FALSE}
+install.packages("pacman")
+library(pacman)
+p_load(tidyverse,nlme,car,ggpubr,rcompanion)
 ```
 
 ## Finally, if everything went well upto this point then you are all set for our final tutorial session. Else if you still have difficulty with the installations, you can arrive 10 minutes early to the tutorial session and we will try to help troubleshoot. 
